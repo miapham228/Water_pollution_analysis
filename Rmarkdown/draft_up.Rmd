@@ -1,0 +1,295 @@
+---
+title: "Water quality assessment and source identification of the Shuangji River"
+author: "Tuyet Pham"
+output:
+  pdf_document: default
+  html_document: default
+geometry: margin=0.75in
+---
+
+```{r setup, include=FALSE }
+knitr::opts_chunk$set(echo = FALSE,warning=FALSE,message=FALSE)
+# loading library
+library(tidyverse)
+library(dplyr)
+library(psych)
+library(MASS)
+library(cluster)
+library(factoextra)
+library(kmed)
+```
+
+## Introduction
+
+The water quality directly impacts ecosystem, human health and other economic activities. The pollutants in water can originate from various sources, including industrial discharge, agricultural runoff, urban runoff, and natural processes. Additionally, the surface water runoff is influenced by the seasonal and spatial factor, regular monitoring programs are needed to have reliable estimate water quality. Consequently, these monitoring efforts generate a large and complex data with numerous chemical parameters, which are challenging to interpret and address effectively.
+
+These challenges highlight that multivariate statistical analysis is an effective tool for handling multi-component chemical and physical measurements, facilitating meaningful data reduction and interpretation. It is also a valuable tool for identifying factors and sources that impact water systems and cause changes in water quality. 
+
+This study explored different multivariate statistical techniques to determine the potential sources of water pollution, analyse the similarity or dissimilarity between 14 sites and identify the factors that cause the spatial changes of river water quality. 
+
+
+## Data Source
+
+The data set which contains 19 physical and chemical parameters were monitored by sampling at 14 different sites in 2 years 2019-2020 along the Shuangji river. The 19 physical and chemical parameters included pH, dissolved oxygen (DO), chemical oxygen demand (COD), ammonia-nitrogen (NH3-N), total phosphorus (TP), chemical oxygen demand (CODMn), fluoride (F), petroleum hydrocarbons (Oil), linear alkylbenzene sulfonates (LAS), copper (Cu), zinc (Zn), cadmium (Cd), arsenic (As), mercury (Hg), hexavalent chromium (Cr6+), total cyanides (CN), volatile phenols (VP), sulphide (S) and selenium (Se) (Liu et al.,2021).
+
+Among 14 sites, sites T1, T2, T3, T4, T5 and T6 are the main tributaries entering the Shuangji River while sites M1, M2, M3, M4, M5, M6, M7 and M8 are the key points on the main bank of the Shuangji River, and site M8 is under municipal control and provides the exit water of Xinmi County. Specifically, sites M1-M3 and T1-T3 are closer to the urban area, and the main source of pollution is urban sewage entering the river. Sites M4, M5, T4 and T5 are located in the industrial zone where the paper industry in their vicinity is relatively developed. Sites M6-M8 are downstream of the river and have no inflow of external water (Liu et al.,2021).
+
+## Research Questions
+
+This research aims to provide some empirical evidence on the effectiveness of using multivariate statistical techniques. The major research questions I investigate are:
+
+-   Is Principal Component Analysis able to identify the important factors that affect water quality?
+
+-   Are Clustering Analysis and Discriminant Analysis able to identify the most crucial parameters that cause the spatial change of the river water quality?
+
+## Research Methodology
+
+### Principal Component Analysis
+
+PCA can be used as a technique to reduce dimension while retaining most of the information in data. Through its coefficients, we are hopefully able to identify the important parameters that explain the most variation in data as well as capture the structure of data. Taking into account the differences in the magnitude and measurement units, all parameters were standardized to ensure that each feature contributes equally to the analysis.
+
+### Clustering Analysis
+
+Cluster analysis is a multivariate statistical method that explores the naturally occurring groups within a data set according to their distance. To classify sites into clusters, various clustering methods were applied to a normalized aggregate data set. These methods included Hierarchical clustering analysis with complete linkage, K-Means clustering, and K-Medoids clustering, all using Euclidean distance as the measure of similarity. Based on the data description, which identifies three main areas (urban areas, industrial zones, and downstream of the river), three clusters were formed. 
+
+### Linear Discriminant Analysis
+
+Discriminant Analysis is a statistical method for analyzing the difference between two or more naturally occurring groups. By examining the correlations between the discriminant functions and the original variables, this method highlights the variables that contribute the most to the differences across groups. To explore the causes of spatial changes, the discriminant analysis of the original data was run to construct discriminant functions to evaluate the spatial changes in river water quality. The clusters from Clustering Analysis are group-dependent variables, and all measurement parameters are independent variables. 
+
+## Result
+
+### Principal Component Analysis
+
+Figure 1 shows the explained variance of the first several principal components by the PCA. The PCA revealed six principal component PCs, which explained about 67% of the total variance, with PC1 explaining 29.2% of the total variance.
+
+```{r fig.show='hide'}
+# loading data
+water_q <- read.csv("water_quality.csv")
+
+# explore boxplot of all parameters
+boxplot(water_q[,3:21], main="The boxplot of water quality parameters", xlab="Water quality parameters", ylab="Units")
+
+# convert to long form
+long_data <- pivot_longer(water_q,!c("X","NO."), names_to = "Parameter",values_to = "Measurement")
+
+# have a look on some basic statistics for all parameters
+stats <- long_data %>% group_by(NO.,Parameter) %>% summarise( Max = max(Measurement), Min = min(Measurement), Mean = mean(Measurement),SD= sd(Measurement))
+```
+
+```{r}
+# perform PCA
+water.pc <- prcomp(water_q[,3:21], scale. = TRUE)
+
+# Calculate proportion of explained variance for each component
+var_explained <- water.pc$sdev^2/sum(water.pc$sdev^2)
+```
+
+```{r, fig.width=6, fig.height=4, fig.cap="Proportion of Variance Explained by Each Principal Component"}
+# Create scree plot
+fviz_eig(water.pc, addlabels = TRUE, ylim = c(0, 30)) +
+  ggtitle("Scree Plot of Principal Components") +
+  xlab("Principal Components") +
+  ylab("Variance Explained")
+```
+
+However, the coefficients for all six PCs appear not interpretable (all coefficients are quite similar in magnitude), so we examined the correlations instead of the raw coefficients. These correlations indicate that the first PC was strongly correlated with *COD*, *TP*, *Cu* and *VP* (all correlations \> 0.7). The second PC was moderately correlated with *F* and the third PC was highly correlated with *LAS*. However, the fourth, fifth and sixth PCs were not highly correlated with any parameters(although the fifth PC was moderately correlated with *DO*). These findings indicated that PC1 and PC2 mainly represented the emissions related to industrial discharges, chemical products manufacturing or metal products while PC3 represented the pollution source from household product because *LAS* are commonly found through domestic waste-water discharge. 
+
+
+
+```{r}
+# correlations between the 1st-6th PCs and the original variables
+corre <- round(cor(water_q[,3:21],water.pc$x[,1:6]),2)
+
+# a table of correlations
+knitr::kable(corre, caption = "Correlations between original parameters and PCs")
+```
+
+To make the results more interpretable, a varimax rotation with Kaiser normalisation was perfomed, the value of PC was further revealed and the contribution of the original variables were clearer. 
+
+```{r fig.show='hide'}
+# pair plots of six PCs
+pairs(water.pc$x[,1:6],col=as.numeric(as.factor(water_q$NO.)) + 2, pch =as.numeric(as.factor(water_q$NO.)))
+
+# raw coefs
+coefs <- round(water.pc$rotation[,1:6],3) # uninterpretable due to similar magnitudes
+```
+
+```{r}
+# doing varimax rotation, with Kaiser normalization
+var.rot <- principal(water_q[,3:21],rotate="varimax",6)
+loadings <- round(as.vector(var.rot$loadings),2)
+loadings_mt <- matrix(loadings,ncol=6,byrow=F)
+loadings_df <- data.frame(loadings_mt,row.names = colnames(water_q[,3:21]))
+colnames(loadings_df) <- paste0("RC", 1:6)
+
+# a table of loadings for all rotated components
+knitr::kable(loadings_df, caption = "Loadings of 19 parameters on six PCs( by Varimax rotation with Kaiser normalization)")
+```
+RC1 which accounted for 15.9 % of the total variance had strong positive loadings on *Cu* and *Hg* and moderate positive loadings on *S*, *CN* and *VP*, indicating pollution are often associated with anthropogenic sources such as industrial discharge or urban runoff. This can be explained by the fact that the main source of pollution is domestic pollution sources and metal industries which are located at the upstream of the tributaries, resulting heavy metal pollution. 
+
+RC2 (account for 14.5% of total variance) had strong positive loadings on *Oil*, *Cr6+*, and moderate positive loadings on *F*, *COD* and *CODMn*, revealing as fluoride  and heavy metal pollution. These chemical parameters indicates that the source of pollution was the discharge of waste-water from the chemical industry, which is related to some chemical industries and metal manufacturing industries along the river. 
+
+RC3 (account for 10.6% of total variance) had strong positive loading on *Se*, *As* and moderate positive loading on *Cd*, indicating that the source pollution was industrial wastewater. This is related to paper industry and steel casting manufacturing industries along the Shuangji River.
+
+RC4 (account for 10.2% of total variance) had strong positive loading on *NH3.N* and moderate positive loadings on *S*, *TP*, indicating that pollution was from mineral-related hydrochemistry and domestic sewage. 
+
+RC5 which represented 9% of total variance had strong positive loading on *LAS* and moderate positive loading on *PH*, which reveals as coming from detergents and personal necessities in domestic sewage. 
+
+RC6 which represented 7.2% of total variance had strong negative loading on *DO*, suggesting that the pollutants in the water consumed a large amount of oxygen. 
+
+
+
+### Cluster Analysis
+
+The K-Medoids method, chosen for its highest average Silhouette width among the methods tested, was used to produce these clusters. Group A contained sites M2, M4 to M8 and T6 which were in moderately polluted areas, group B included sites M1, T1 which were highly polluted and group C comprised sites M3, T2 to T5 which were low-pollution areas. Below is the plot of the first two principal components on the data with the newly assigned groups.
+
+```{r}
+# aggregate data before performing cluster analysis
+data2 <- water_q[,-1] %>% group_by(NO.) %>% summarise(across(everything(),mean)) %>% as.data.frame()
+d= dist(scale(data2[,-1]))
+
+# Hierachical Clustering 
+r= hclust(d,method="complete") # using complete linkage
+# evaluation the goodness of clustering
+cutree(r,k=3) ->tree2
+asw_hierarchical <- summary(silhouette(tree2, d))$avg.width
+
+# K-means Clustering
+kmod<-kmeans(scale(data2[,-1]), centers=3, nstart=20)
+asw_kmeans <- summary(silhouette(kmod$cluster, d))$avg.width
+
+# K-medoids Clustering
+fastkmed(d,3)->kmed
+asw_kmed <- summary(silhouette(kmed$cluster, d))$avg.width
+```
+
+```{r fig.width=6, fig.height=4, fig.cap="PCA plot"}
+# assign objects for kmedoid method - 3 clusters
+G_A <- data2$NO.[kmed$cluster==1]
+G_B <- data2$NO.[kmed$cluster==2]
+G_C <- data2$NO.[kmed$cluster==3]
+water_q$Group <- ifelse(water_q$NO. %in% G_B,"Group B",ifelse(water_q$NO. %in% G_A,"Group A","Group C"))
+water_q$Group <- as.factor(water_q$Group)
+
+# Look at the first two PCs
+plot(water.pc$x[,1],water.pc$x[,2],col=as.numeric(water_q$Group), pch=as.numeric(water_q$Group), xlab=" PC1", ylab="PC2", main ="PCA plot of water quality data",cex.main=0.9)
+legend('bottomleft',legend=levels(water_q$Group),col=c(1,2,3), cex=0.8,pch = c(1,2,3))
+
+```
+
+\newpage
+
+### Linear Discriminant Analysis
+
+The derived variables are normally distributed and have similar standard deviations across groups, therefore the results are reliable. The parameters which are the most important variables in separating groups are *TP*, *COD*, *CODMn*, *Oil*, *S*, *F*, *Cu*,*CN* based on these correlations with the first discriminant function.  
+
+
+```{r}
+# perform LDA
+water_q <- water_q[,-c(1,2)]
+water.lda <- lda(Group ~ ., data= water_q, tol=1.0e-25)
+water.predict<-predict(water.lda)
+
+# checking LDA assumptions of equal variance and normality across groups
+# by checking the derived variables to be of equal variance and normality across groups
+# checking normal distributed of 1st LDA
+result1 <- shapiro.test(water.predict$x[water_q$Group=="Group A",1])
+result2 <-shapiro.test(water.predict$x[water_q$Group=="Group B",1])
+result3 <-shapiro.test(water.predict$x[water_q$Group=="Group C",1])
+
+# checking normal distributed of 2nd LDA
+result4 <-shapiro.test(water.predict$x[water_q$Group=="Group A",2])
+result5 <-shapiro.test(water.predict$x[water_q$Group=="Group B",2])
+result6 <-shapiro.test(water.predict$x[water_q$Group=="Group C",2]) 
+# all LD functions are normally distributed across groups.
+
+# checking equal variance of LDA
+# group A, LD1
+sd1 <- sd(water.predict$x[water_q$Group=="Group A",1]) # sd = 0.89
+
+## group B, LD1
+sd2 <- sd(water.predict$x[water_q$Group=="Group B",1])  # sd = 0.97
+
+## group C, LD1
+sd3 <- sd(water.predict$x[water_q$Group=="Group C",1]) # sd = 1.14
+
+## group A, LDA2
+sd4 <- sd(water.predict$x[water_q$Group=="Group A",2]) # sd = 0.99
+
+## group B, LDA2
+sd5 <- sd(water.predict$x[water_q$Group=="Group B",2]) # sd = 1.22
+
+## group C, LDA2
+sd6 <- sd(water.predict$x[water_q$Group=="Group C",2]) # sd = 0.92
+
+# we have similar standard deviations (not much different)
+# so our results are reliable. 
+
+# correlation between variables and LD function
+corre.lda <- matrix(NA, ncol=2, nrow=19)
+colnames(corre.lda)=c("LD1", "LD2")
+rownames(corre.lda)= names(water_q[,-20])
+newdata= water_q[,-20]
+for (i in 1:2){
+  for (j in 1:19){
+    corre.lda[j,i] <- round(cor(newdata[,j],water.predict$x[,i]),2)
+  }
+}
+knitr::kable(as.data.frame(corre.lda), caption="Correlations between parameters and LDA functions")
+```
+
+The accuracy rate is 93% when using the first LDA function and it is 92% when using two LDA functions as determined by leave-one-out cross validation. Most of the separation is accomplished by LD1. Below are the classification table and the plot of the LDA scores.
+
+```{r fig.width=6, fig.height=4, fig.cap="LDA scores"}
+# check accuracy if use 1 or 2 variates using cross-validation
+cv.predictions<-matrix(NA, ncol=2, nrow=nrow(water_q))
+for(i in 1:nrow(water_q)){
+ mod<-lda(Group ~ ., data= water_q[-i,],tol=1.0e-25)
+ for(j in 1:2){
+ mod.predict<-predict(mod, newdata=water_q[i,], dimen=j)
+ cv.predictions[i,j]<-mod.predict$class
+ }
+}
+
+# accuracy rate
+rate1 <- sum(cv.predictions[,1]==as.numeric(water_q$Group))/168 # 0.93
+rate2 <- sum(cv.predictions[,2]==as.numeric(water_q$Group))/168 # 0.92
+
+# table of predicted values and true groups
+df <- rbind(`predicted A` = c(81,3,5), `predicted B` = c(0,21,0), `predicted C` = c(3,0,55))
+colnames(df) <- c("True A","True B","True C")
+knitr::kable(df, caption = "Classification table using 1 LDA function")
+
+# LDA score plot
+plot(water.predict$x, col=as.numeric(water_q$Group), main="LDA plot for water quality data", cex.main=0.9)
+legend('topright', title="Group",legend = levels(water_q$Group), col=c("black","red","green"),pch=1,cex=0.6)
+
+```
+
+
+
+\newpage
+
+## Conclusions
+
+In this study, different multivariate statistical techniques were used to identify the important factors affecting water quality and distinguishing the differences between the monitoring points. Principal component analysis and rotated principal component revealed six principal component PCs which explained about 67% of the total variance, however there is not a large amount of variables which was reduced (it included 17 parameters over 19 parameters). The parameters which have the greatest contributions to changes in river water quality were *COD*, *TP*, *DO*, *F*, *LAS*, *Cu* and *VP* (based on their correlations with PCs). However, the results from PCA and rotated PCA indicates that these parameters can be mainly divided into natural (such as *PH*, *DO*, *NH3-N*, *TP*) and anthropogenic pollution components (such as *COD*, *CODMn*, *LAS*, *Cu*,...). This distinction is crucial for developing targeted strategies to manage and improve water quality.
+
+Cluster analysis divided 14 sampling points into three clusters according to the similarity of river water quality and pollution characteristics. This approach offered an efficient method for classifying surface water in the studied area and can significantly reduce the number of sampling points needed to analyze the river while minimizing information loss. The LDA results indicated that *TP*, *COD*, *CODMn*, *Oil*, *S*, *F*, *Cu*,*CN* were the most important variables in differentiating three areas, achieving a 93% accuracy rate.
+
+This study demonstrated the necessity and practicality of employing multivariate statistical techniques to interpret and evaluate large and complex data set, ultimately providing better insights into water quality and optimizing the allocation of monitoring points. These results provide a suggestion for authorities to implement effective management strategies to prevent and control river pollution, and to establish strategic monitoring points. By addressing the specific sources of pollution, these strategies can mitigate the broader environmental problem of water pollution, which affects ecosystems, biodiversity, and human health.   
+
+
+\newpage
+
+## Appendix
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
+
+\newpage
+
+## References
+
+Liu, J., Zhang, D., Tang, Q., Xu, H., Huang, S., Shang, D., et al. (2021) Water quality assessment and source identification of the Shuangji River (China) using multivariate statistical methods. PLoS ONE 16(1): e0245525. https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0245525
+
+
